@@ -13,13 +13,13 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 
 # Pushbullet API key (sign up at https://www.pushbullet.com/ to get the key)
-API_KEY = ''
+# API_KEY = ''
 
 # Initialize Pushbullet instance
-pb = Pushbullet(API_KEY)
+# pb = Pushbullet(API_KEY)
 
 # Function to get the current page content for static pages
-def get_static_page_content():
+def get_static_page_content(url):
     response = requests.get(url)
     soup = BeautifulSoup(response.text, 'html.parser')
     # Modify the selector according to the HTML structure of the page
@@ -28,7 +28,7 @@ def get_static_page_content():
     return job_text
 
 # Function to get the current page content for dynamic pages (using Selenium)
-def get_dynamic_page_content():
+def get_dynamic_page_content(url):
     chrome_options = Options()
     chrome_options.add_argument("--headless")  # Run in headless mode (no browser UI)
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
@@ -46,13 +46,15 @@ def send_notification(message):
     pb.push_note("Careers Portal Update", message)
 
 # Function to compare and detect changes
-def check_for_updates():
+def check_for_updates(url):
+    update = ''
     # Try to get content using the static method first
     try:
-        current_content = get_static_page_content()
-    except Exception:
+        current_content = get_static_page_content(url)
+    except Exception as e:
         # If static content method fails, fall back to dynamic method (Selenium)
-        current_content = get_dynamic_page_content()
+        current_content = get_dynamic_page_content(url)
+        update = e
 
     # Load the previously stored content (if any)
     try:
@@ -66,16 +68,18 @@ def check_for_updates():
 
     # Compare the hash of the current content with the previous one
     if current_hash != last_content_hash:
-        send_notification("The careers portal has been updated!")
+        update = 'updated'
+        # send_notification("The careers portal has been updated!")
 
         # Save the new hash
         with open('last_content_hash.txt', 'w') as file:
             file.write(current_hash)
+    return update
 
 
 # Step 1: Read the Excel file into a DataFrame
 try:
-    df = pd.read_excel('your_file.xlsx', sheet_name='Sheet1')
+    df = pd.read_excel('list.xlsx', sheet_name='Sheet2')
 except Exception as e:
     print(f"Error reading Excel file: {e}")
     exit(1)
@@ -84,22 +88,22 @@ except Exception as e:
 for idx, row in df.iterrows():
     try:
         # Read the value from the 'InputColumn' (assuming numeric data)
-        input_value = row['InputColumn']
+        input_value = row['company']
 
         # Call the external function to calculate the new value
-        calculated_value = check_for_updates(input_value)
+        calculated_value = check_for_updates(str(input_value))
 
         # Write the calculated value to the adjacent 'CalculatedColumn'
-        df.at[idx, 'CalculatedColumn'] = calculated_value
+        df.at[idx, 'update'] = calculated_value
 
     except Exception as e:
         print(f"Error processing row {idx}: {e}")
         # You can either set a default value or leave it empty for rows where calculation fails
-        df.at[idx, 'CalculatedColumn'] = None
+        df.at[idx, 'update'] = str(e)
 
 # Step 3: Save the updated DataFrame back to the Excel file
 try:
-    df.to_excel('your_file_updated.xlsx', sheet_name='Sheet1', index=False)
+    df.to_excel('list.xlsx', sheet_name='Sheet2', index=False)
     print("File updated successfully.")
 except Exception as e:
     print(f"Error saving Excel file: {e}")
